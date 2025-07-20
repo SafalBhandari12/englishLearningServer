@@ -24,14 +24,22 @@ export class UserController {
       const user = await prisma.user.findUnique({
         where: { id: req.user?.userId },
         select: {
-          id: true,
           email: true,
           name: true,
           emailVerified: true,
-          role: true,
-          candidate: true,
+          candidate: {
+            select: {
+              context: true,
+              accuracyScore: true,
+              pronounciationScore: true,
+              fluencyScore: true,
+              completenessScore: true,
+              nextQuestion: true,
+            },
+          },
         },
       });
+      console.log(user);
       if (!user) {
         res.status(404).json({ success: false, message: "User not found" });
         return;
@@ -42,7 +50,7 @@ export class UserController {
           .json({ success: false, message: "User not registered" });
         return;
       }
-      res.json(user);
+      res.json({ success: true, message: "User data fetched sucessfully",user });
       return;
     } catch (error) {
       console.error("Error fetching user:", error);
