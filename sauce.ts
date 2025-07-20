@@ -38,7 +38,7 @@ async function assessPronunciation(): Promise<void> {
   const fileBuffer: Buffer = fs.readFileSync("pronunciation_input.wav");
   const audioConfig: sdk.AudioConfig =
     sdk.AudioConfig.fromWavFileInput(fileBuffer);
-
+    
   // Create PronunciationAssessmentConfig
   const pronConfig: sdk.PronunciationAssessmentConfig =
     new sdk.PronunciationAssessmentConfig(
