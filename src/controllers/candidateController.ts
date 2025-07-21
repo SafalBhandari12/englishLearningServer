@@ -40,6 +40,10 @@ const infoSchema = z.object({
   info: z.string(),
 });
 
+const cursorIdSchema = z.object({
+  cursorId: z.string().optional(),
+});
+
 const {
   AZURE_STORAGE_ACCOUNT_NAME,
   AZURE_STORAGE_CONTAINER,
@@ -110,6 +114,32 @@ export class UserController {
         .json({ success: false, message: "Internal server error" });
       return;
     }
+  }
+
+  static async chatHistory(req: AuthRequest, res: Response) {
+    const pazeSize = 20;
+    console.log("Safal");
+
+    const { cursorId } = cursorIdSchema.parse(req.query);
+    const messages = await prisma.chatHistory.findMany({
+      where: { candidateId: req.user?.userId },
+      select: {
+        bot: true,
+        createdAt: true,
+        user: true,
+        userAudio: true,
+        id: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: pazeSize,
+      ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+    });
+    const ordered = [...messages].reverse();
+
+    const nextCursor =
+      messages.length === pazeSize ? messages[messages.length - 1].id : null;
+
+    return res.status(200).json({ success: true, data: ordered, nextCursor });
   }
 
   static async completeRegistration(req: AuthRequest, res: Response) {

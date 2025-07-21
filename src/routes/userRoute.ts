@@ -24,4 +24,10 @@ router.post(
   upload.single("audio"),
   asyncHandler(UserController.sendAnswer)
 );
+
+router.get(
+  "/chatHistory",
+  asyncHandler(isAuthenticated),
+  asyncHandler(UserController.chatHistory)
+);
 export default router;
