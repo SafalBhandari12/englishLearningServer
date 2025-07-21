@@ -20,6 +20,7 @@ router.post(
 
 router.post(
   "/answer",
+  asyncHandler(isAuthenticated),
   upload.single("wav"),
   asyncHandler(UserController.sendAnswer)
 );

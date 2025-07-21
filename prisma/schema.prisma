@@ -19,6 +19,13 @@ enum userRole {
   COMPANY
 }
 
+enum scoreCategory{
+  ACCURACY_SCORE
+  PRONOUNCIATION_SCORE
+  FLEUNCY_SCORE
+  COMPLETENESS_SCORE
+}
+
 model User {
   id       String  @id @default(cuid())
   email    String  @unique
@@ -59,6 +66,7 @@ model Candidate {
   nextQuestion String
 
   chatHistory ChatHistory[]
+  scores Scores[]
 
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -72,12 +80,25 @@ model ChatHistory{
 
   bot String
   user String
+  userAudio String
 
   createdAt DateTime @default(now())
   candidateId String
   candidate Candidate @relation(fields: [candidateId],references: [userId],onDelete: Cascade)
 
   @@map("chatHistory")
+}
+
+model Scores{
+  id String @id @default(uuid())
+  type scoreCategory
+  candidateId String
+  score Float
+  createdAt DateTime @default(now())
+
+  candidate Candidate @relation(fields: [candidateId],references: [userId])
+
+  @@map("scores")
 }
 
 model RefreshTokens {
