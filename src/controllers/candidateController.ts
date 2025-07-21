@@ -13,6 +13,21 @@ import * as sdk from "microsoft-cognitiveservices-speech-sdk"; // <-- added impo
 import { assessPronunciationFromBuffer } from "../utils/speechService.js";
 import { transcribeWithAssemblyAI } from "../utils/speechRecognizer.js";
 
+// Helper function to validate WAV buffer
+function isValidWavBuffer(buffer: Buffer): boolean {
+  if (buffer.length < 44) return false; // WAV header is at least 44 bytes
+
+  // Check for RIFF header
+  const riffHeader = buffer.subarray(0, 4).toString("ascii");
+  if (riffHeader !== "RIFF") return false;
+
+  // Check for WAVE identifier
+  const waveHeader = buffer.subarray(8, 12).toString("ascii");
+  if (waveHeader !== "WAVE") return false;
+
+  return true;
+}
+
 const longUrlSchema = z.object({
   longUrl: string(),
 });
@@ -147,12 +162,22 @@ export class UserController {
         .json({ success: false, message: "No file uploaded" });
     }
 
-    // Check file type and audio format
+    // Accept .wav and .webm files
     const ext = req.file.originalname.toLowerCase();
-    if (!ext.endsWith(".wav")) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Only .wav files allowed" });
+    const allowedExts = [".wav", ".webm"];
+    const allowedMimes = [
+      "audio/wav",
+      "audio/x-wav",
+      "audio/webm",
+      "video/webm",
+    ];
+    const isValidExt = allowedExts.some((e) => ext.endsWith(e));
+    const isValidMime = allowedMimes.includes(req.file.mimetype);
+    if (!isValidExt || !isValidMime) {
+      return res.status(400).json({
+        success: false,
+        message: "Only .wav or .webm audio files are allowed",
+      });
     }
 
     // Validate audio buffer
@@ -169,12 +194,49 @@ export class UserController {
         .json({ success: false, message: "Audio file too small" });
     }
 
+    let audioBuffer = req.file.buffer;
+    let audioMimeType = req.file.mimetype;
+
+    // Convert webm to wav if needed
+    if (ext.endsWith(".webm")) {
+      try {
+        const { convertWebmToWav } = await import("../utils/audioConvert.js");
+        audioBuffer = await convertWebmToWav(req.file.buffer);
+        audioMimeType = "audio/wav";
+        console.log(
+          "WebM to WAV conversion successful, buffer size:",
+          audioBuffer.length
+        );
+      } catch (err) {
+        console.error("webm to wav conversion failed:", err);
+        return res
+          .status(500)
+          .json({ success: false, message: "webm to wav conversion failed" });
+      }
+    }
+
+    // Validate WAV header after potential conversion
+    if (audioMimeType === "audio/wav" && !isValidWavBuffer(audioBuffer)) {
+      console.error(
+        "Invalid WAV format detected. Buffer size:",
+        audioBuffer.length
+      );
+      console.error(
+        "First 12 bytes:",
+        audioBuffer.subarray(0, 12).toString("hex")
+      );
+      return res.status(400).json({
+        success: false,
+        message: "Invalid WAV format - corrupted or missing RIFF header",
+      });
+    }
+
     // 1. Upload WAV to Azure Blob Storage
     const blobName = `audio${Date.now()}.wav`;
     const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 
-    await blockBlobClient.uploadData(req.file.buffer, {
-      blobHTTPHeaders: { blobContentType: req.file.mimetype },
+    await blockBlobClient.uploadData(audioBuffer, {
+      blobHTTPHeaders: { blobContentType: "audio/wav" }, // Always use audio/wav after processing
     });
 
     // 2. Check AssemblyAI API configuration
@@ -189,20 +251,20 @@ export class UserController {
 
     // 3. Transcribe audio to text using AssemblyAI
     console.log("Starting speech recognition with AssemblyAI...");
-    console.log("Audio buffer size:", req.file.buffer.length);
-    console.log("Audio mimetype:", req.file.mimetype);
+    console.log("Audio buffer size:", audioBuffer.length);
+    console.log("Audio mimetype:", "audio/wav");
 
     let recognizedText = "";
     try {
       recognizedText = await transcribeWithAssemblyAI({
-        audio: req.file.buffer,
+        audio: audioBuffer,
         apiKey: assemblyAIApiKey,
       });
-    } catch {
+    } catch (error) {
+      console.error("AssemblyAI transcription failed:", error);
       return res.status(500).json({
         success: false,
-        message:
-          "AssemblyAI transcription failed and no Azure fallback configured",
+        message: "Speech transcription failed",
       });
     }
 
@@ -226,16 +288,32 @@ export class UserController {
 
     if (subscriptionKey && serviceRegion && recognizedText.trim()) {
       try {
-        assessment = await assessPronunciationFromBuffer(req.file.buffer, {
+        // Additional validation before calling Azure Speech SDK
+        if (!isValidWavBuffer(audioBuffer)) {
+          console.error(
+            "WAV validation failed before pronunciation assessment"
+          );
+          throw new Error("Invalid WAV format for pronunciation assessment");
+        }
+
+        console.log("Starting pronunciation assessment...");
+        assessment = await assessPronunciationFromBuffer(audioBuffer, {
           referenceText: recognizedText,
           gradingSystem: sdk.PronunciationAssessmentGradingSystem.HundredMark,
           granularity: sdk.PronunciationAssessmentGranularity.Word,
           enableMiscue: true,
         });
+        console.log("Pronunciation assessment completed:", assessment);
       } catch (error) {
         console.error("Pronunciation assessment failed:", error);
+        console.error("Error details:", (error as Error).message);
         // Continue without assessment rather than failing the entire request
+        assessment = null;
       }
+    } else {
+      console.log(
+        "Skipping pronunciation assessment - missing Azure config or no recognized text"
+      );
     }
 
     const bot = await prisma.candidate.findUnique({
@@ -283,33 +361,37 @@ export class UserController {
     console.log("Next Question: ", nextQuestion);
     console.log(conversationHistory);
     console.log(context);
-    console.log(assessment);
+    console.log("Assessment result:", assessment);
 
-
-    await prisma.scores.createMany({
-      data: [
-        {
-          candidateId: req.user?.userId!,
-          type: "ACCURACY_SCORE",
-          score: assessment?.accuracyScore!,
-        },
-        {
-          candidateId: req.user?.userId!,
-          type: "COMPLETENESS_SCORE",
-          score: assessment?.completenessScore!,
-        },
-        {
-          candidateId: req.user?.userId!,
-          type: "FLEUNCY_SCORE",
-          score: assessment?.fluencyScore!,
-        },
-        {
-          candidateId: req.user?.userId!,
-          type: "PRONOUNCIATION_SCORE",
-          score: assessment?.pronunciationScore!,
-        },
-      ],
-    });
+    // Only save scores if assessment was successful
+    if (assessment) {
+      await prisma.scores.createMany({
+        data: [
+          {
+            candidateId: req.user?.userId!,
+            type: "ACCURACY_SCORE",
+            score: assessment.accuracyScore,
+          },
+          {
+            candidateId: req.user?.userId!,
+            type: "COMPLETENESS_SCORE",
+            score: assessment.completenessScore,
+          },
+          {
+            candidateId: req.user?.userId!,
+            type: "FLEUNCY_SCORE",
+            score: assessment.fluencyScore,
+          },
+          {
+            candidateId: req.user?.userId!,
+            type: "PRONOUNCIATION_SCORE",
+            score: assessment.pronunciationScore,
+          },
+        ],
+      });
+    } else {
+      console.log("Skipping score saving - no assessment available");
+    }
 
     const pronounciationScore = await prisma.scores.findMany({
       where: { candidateId: req.user?.userId, type: "PRONOUNCIATION_SCORE" },

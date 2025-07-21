@@ -38,6 +38,25 @@ export async function assessPronunciationFromBuffer(
   wavBuffer: Buffer,
   config: PronunciationConfig
 ): Promise<AssessmentResult> {
+  // Validate WAV buffer before processing
+  if (wavBuffer.length < 44) {
+    throw new Error("WAV buffer too small - missing header");
+  }
+
+  // Check for RIFF header
+  const riffHeader = wavBuffer.subarray(0, 4).toString("ascii");
+  if (riffHeader !== "RIFF") {
+    throw new Error(`Invalid WAV header: expected 'RIFF', got '${riffHeader}'`);
+  }
+
+  // Check for WAVE identifier
+  const waveHeader = wavBuffer.subarray(8, 12).toString("ascii");
+  if (waveHeader !== "WAVE") {
+    throw new Error(`Invalid WAV format: expected 'WAVE', got '${waveHeader}'`);
+  }
+
+  console.log("WAV validation passed. Buffer size:", wavBuffer.length);
+
   // Create speech config
   const speechConfig = sdk.SpeechConfig.fromSubscription(
     subscriptionKey,
@@ -46,7 +65,14 @@ export async function assessPronunciationFromBuffer(
   speechConfig.speechRecognitionLanguage = "en-US";
 
   // Create audio config from buffer
-  const audioConfig = sdk.AudioConfig.fromWavFileInput(wavBuffer);
+  let audioConfig: sdk.AudioConfig;
+  try {
+    audioConfig = sdk.AudioConfig.fromWavFileInput(wavBuffer);
+  } catch (error) {
+    throw new Error(
+      `Failed to create audio config: ${(error as Error).message}`
+    );
+  }
 
   // Build pronunciation assessment config
   const pronConfig = new sdk.PronunciationAssessmentConfig(
@@ -65,6 +91,23 @@ export async function assessPronunciationFromBuffer(
     recognizer.recognizeOnceAsync(
       (result) => {
         try {
+          if (result.reason === sdk.ResultReason.NoMatch) {
+            recognizer.close();
+            reject(new Error("No speech could be recognized from the audio"));
+            return;
+          }
+
+          if (result.reason === sdk.ResultReason.Canceled) {
+            const cancellation = sdk.CancellationDetails.fromResult(result);
+            recognizer.close();
+            reject(
+              new Error(
+                `Recognition canceled: ${cancellation.reason} - ${cancellation.errorDetails}`
+              )
+            );
+            return;
+          }
+
           const assessment =
             sdk.PronunciationAssessmentResult.fromResult(result);
           const json = JSON.parse(
@@ -86,12 +129,14 @@ export async function assessPronunciationFromBuffer(
           resolve(output);
         } catch (e) {
           recognizer.close();
-          reject(e);
+          reject(
+            new Error(`Assessment processing failed: ${(e as Error).message}`)
+          );
         }
       },
       (error) => {
         recognizer.close();
-        reject(error);
+        reject(new Error(`Speech recognition failed: ${error}`));
       }
     );
   });

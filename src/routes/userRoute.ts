@@ -21,7 +21,7 @@ router.post(
 router.post(
   "/answer",
   asyncHandler(isAuthenticated),
-  upload.single("wav"),
+  upload.single("audio"),
   asyncHandler(UserController.sendAnswer)
 );
 export default router;
