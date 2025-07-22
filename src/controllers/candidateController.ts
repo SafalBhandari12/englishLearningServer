@@ -7,8 +7,8 @@ import {
   generateText,
   generateNextQuestion,
 } from "src/utils/gemini.js";
-import { infoPrompt, nextQuestionPrompt } from "src/utils/prompts.js";
-import { BlobServiceClient, BlockBlobClient } from "@azure/storage-blob";
+import { infoPrompt, nextQuestionPrompt } from "../utils/prompts.js";
+import { BlobServiceClient } from "@azure/storage-blob";
 import * as sdk from "microsoft-cognitiveservices-speech-sdk"; // <-- added import
 import { assessPronunciationFromBuffer } from "../utils/speechService.js";
 import { transcribeWithAssemblyAI } from "../utils/speechRecognizer.js";
