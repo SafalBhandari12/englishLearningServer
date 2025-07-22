@@ -6,7 +6,7 @@ import {
   cleanJsonResponseFirstQuestion,
   generateText,
   generateNextQuestion,
-} from "src/utils/gemini.js";
+} from "../utils/gemini.js";
 import { infoPrompt, nextQuestionPrompt } from "../utils/prompts.js";
 import { BlobServiceClient } from "@azure/storage-blob";
 import * as sdk from "microsoft-cognitiveservices-speech-sdk"; // <-- added import
