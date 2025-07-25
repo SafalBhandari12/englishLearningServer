@@ -96,7 +96,7 @@ export class AuthController {
     });
 
     if (!user || !user.password) {
-      throw createError("Not signed in", 401);
+      throw createError("User not registered", 401);
     }
     if (!user.emailVerified) {
       throw createError("Email not verified", 403);

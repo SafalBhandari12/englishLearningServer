@@ -2,6 +2,12 @@
 
 import nodemailer from "nodemailer";
 
+import { MailService } from "@sendgrid/mail";
+
+const sgmail = new MailService();
+
+sgmail.setApiKey(process.env.SENDGRID_API_KEY!);
+
 // Configure your email transporter
 const createTransporter = () => {
   return nodemailer.createTransport({
@@ -50,8 +56,11 @@ export const sendVerificationEmail = async (email: string, token: string) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    await sgmail.send(mailOptions);
   } catch (error) {
+    if (typeof error === "object" && error !== null && "response" in error) {
+      console.log((error as any).response.body);
+    }
     console.error("Error sending verification email:", error);
     throw new Error("Failed to send verification email");
   }
@@ -92,7 +101,7 @@ export const sendPasswordResetEmail = async (email: string, token: string) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    await sgmail.send(mailOptions);
   } catch (error) {
     console.error("Error sending password reset email:", error);
     throw new Error("Failed to send password reset email");
@@ -130,7 +139,8 @@ export const sendWelcomeEmail = async (email: string, name: string) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    const res = await sgmail.send(mailOptions);
+    console.log(res);
   } catch (error) {
     console.error("Error sending password reset email:", error);
     throw new Error("Failed to send password reset email");
