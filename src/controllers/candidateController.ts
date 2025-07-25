@@ -12,6 +12,7 @@ import { BlobServiceClient } from "@azure/storage-blob";
 import * as sdk from "microsoft-cognitiveservices-speech-sdk"; // <-- added import
 import { assessPronunciationFromBuffer } from "../utils/speechService.js";
 import { transcribeWithAssemblyAI } from "../utils/speechRecognizer.js";
+import { stretchLowEnd } from "../utils/mathematicalFunctions.js";
 
 // Helper function to validate WAV buffer
 function isValidWavBuffer(buffer: Buffer): boolean {
@@ -400,22 +401,22 @@ export class UserController {
           {
             candidateId: req.user?.userId!,
             type: "ACCURACY_SCORE",
-            score: assessment.accuracyScore,
+            score: stretchLowEnd(assessment.accuracyScore),
           },
           {
             candidateId: req.user?.userId!,
             type: "COMPLETENESS_SCORE",
-            score: assessment.completenessScore,
+            score: stretchLowEnd(assessment.completenessScore),
           },
           {
             candidateId: req.user?.userId!,
             type: "FLEUNCY_SCORE",
-            score: assessment.fluencyScore,
+            score: stretchLowEnd(assessment.fluencyScore),
           },
           {
             candidateId: req.user?.userId!,
             type: "PRONOUNCIATION_SCORE",
-            score: assessment.pronunciationScore,
+            score: stretchLowEnd(assessment.pronunciationScore),
           },
         ],
       });

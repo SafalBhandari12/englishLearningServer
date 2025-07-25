@@ -18,6 +18,7 @@ export async function generateText(data: {
   const result = await model.generateContent(
     `System Prompt:${prompt}. User information:${info}`
   );
+  console.log(result);
   return result;
 }
 
@@ -37,6 +38,7 @@ export async function generateNextQuestion(data: {
   const result = await model.generateContent(
     `System Prompt:${data.prompt}. Data:${context}`
   );
+  console.log(result);
   return cleanJsonResponseNexttQuestion(result.response.text());
 }
 
