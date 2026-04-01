@@ -2,21 +2,15 @@
 
 import nodemailer from "nodemailer";
 
-import { MailService } from "@sendgrid/mail";
-
-const sgmail = new MailService();
-
-sgmail.setApiKey(process.env.SENDGRID_API_KEY!);
-
-// Configure your email transporter
+// Configure your email transporter for Gmail SMTP
 const createTransporter = () => {
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: 465,
-    secure: true,
+    port: parseInt(process.env.SMTP_PORT || "587"),
+    secure: process.env.SMTP_SECURE === "true", // false for TLS, true for SSL
     auth: {
       user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      pass: process.env.SMTP_PASSWORD,
     },
   });
 };
@@ -27,7 +21,7 @@ export const sendVerificationEmail = async (email: string, token: string) => {
     const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
 
     const mailOptions = {
-      from: process.env.FROM_EMAIL || "noreply@yourapp.com",
+      from: process.env.SMTP_FROM_EMAIL || "noreply@yourapp.com",
       to: email,
       subject: "Verify Your Email Address",
       html: `
@@ -56,11 +50,8 @@ export const sendVerificationEmail = async (email: string, token: string) => {
       `,
     };
 
-    await sgmail.send(mailOptions);
+    await transporter.sendMail(mailOptions);
   } catch (error) {
-    if (typeof error === "object" && error !== null && "response" in error) {
-      console.log((error as any).response.body);
-    }
     console.error("Error sending verification email:", error);
     throw new Error("Failed to send verification email");
   }
@@ -72,7 +63,7 @@ export const sendPasswordResetEmail = async (email: string, token: string) => {
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
     const mailOptions = {
-      from: process.env.FROM_EMAIL || "noreply@yourapp.com",
+      from: process.env.SMTP_FROM_EMAIL || "noreply@yourapp.com",
       to: email,
       subject: "Reset Your Password",
       html: `
@@ -101,7 +92,7 @@ export const sendPasswordResetEmail = async (email: string, token: string) => {
       `,
     };
 
-    await sgmail.send(mailOptions);
+    await transporter.sendMail(mailOptions);
   } catch (error) {
     console.error("Error sending password reset email:", error);
     throw new Error("Failed to send password reset email");
@@ -113,7 +104,7 @@ export const sendWelcomeEmail = async (email: string, name: string) => {
     const transporter = createTransporter();
 
     const mailOptions = {
-      from: process.env.FROM_EMAIL || "noreply@yourapp.com",
+      from: process.env.SMTP_FROM_EMAIL || "noreply@yourapp.com",
       to: email,
       subject: "Welcome to Our Platform!",
       html: `
@@ -139,10 +130,9 @@ export const sendWelcomeEmail = async (email: string, name: string) => {
       `,
     };
 
-    const res = await sgmail.send(mailOptions);
-    console.log(res);
+    await transporter.sendMail(mailOptions);
   } catch (error) {
-    console.error("Error sending password reset email:", error);
-    throw new Error("Failed to send password reset email");
+    console.error("Error sending welcome email:", error);
+    throw new Error("Failed to send welcome email");
   }
 };

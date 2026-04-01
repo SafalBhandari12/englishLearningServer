@@ -7,7 +7,7 @@ import { json } from "stream/consumers";
 const apiKey = process.env.GEMINI_API_KEY!;
 
 const genAI = new GoogleGenerativeAI(apiKey);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 // Example: Generate text
 export async function generateText(data: {
@@ -16,7 +16,7 @@ export async function generateText(data: {
 }) {
   const { prompt, info } = data;
   const result = await model.generateContent(
-    `System Prompt:${prompt}. User information:${info}`
+    `System Prompt:${prompt}. User information:${info}`,
   );
   console.log(result);
   return result;
@@ -36,7 +36,7 @@ export async function generateNextQuestion(data: {
   };
   const context = JSON.stringify(contextJson);
   const result = await model.generateContent(
-    `System Prompt:${data.prompt}. Data:${context}`
+    `System Prompt:${data.prompt}. Data:${context}`,
   );
   console.log(result);
   return cleanJsonResponseNexttQuestion(result.response.text());

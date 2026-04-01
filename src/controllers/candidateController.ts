@@ -62,12 +62,12 @@ if (
 
 // Build the service client by appending the SAS token to the endpoint
 const blobServiceClient = new BlobServiceClient(
-  `https://${AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net${AZURE_STORAGE_SAS_TOKEN}`
+  `https://${AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net${AZURE_STORAGE_SAS_TOKEN}`,
 );
 
 // Point at your container
 const containerClient = blobServiceClient.getContainerClient(
-  AZURE_STORAGE_CONTAINER
+  AZURE_STORAGE_CONTAINER,
 );
 
 export class UserController {
@@ -236,7 +236,7 @@ export class UserController {
         audioMimeType = "audio/wav";
         console.log(
           "WebM to WAV conversion successful, buffer size:",
-          audioBuffer.length
+          audioBuffer.length,
         );
       } catch (err) {
         console.error("webm to wav conversion failed:", err);
@@ -250,11 +250,11 @@ export class UserController {
     if (audioMimeType === "audio/wav" && !isValidWavBuffer(audioBuffer)) {
       console.error(
         "Invalid WAV format detected. Buffer size:",
-        audioBuffer.length
+        audioBuffer.length,
       );
       console.error(
         "First 12 bytes:",
-        audioBuffer.subarray(0, 12).toString("hex")
+        audioBuffer.subarray(0, 12).toString("hex"),
       );
       return res.status(400).json({
         success: false,
@@ -266,9 +266,18 @@ export class UserController {
     const blobName = `audio${Date.now()}.wav`;
     const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 
-    await blockBlobClient.uploadData(audioBuffer, {
-      blobHTTPHeaders: { blobContentType: "audio/wav" }, // Always use audio/wav after processing
-    });
+    try {
+      await blockBlobClient.uploadData(audioBuffer, {
+        blobHTTPHeaders: { blobContentType: "audio/wav" }, // Always use audio/wav after processing
+      });
+    } catch (error) {
+      console.error("Azure Blob upload failed:", error);
+      return res.status(502).json({
+        success: false,
+        message:
+          "Failed to upload audio to Azure Blob Storage. Check AZURE_STORAGE_ACCOUNT_NAME, AZURE_STORAGE_CONTAINER, AZURE_STORAGE_SAS_TOKEN, and network DNS.",
+      });
+    }
 
     // 2. Check AssemblyAI API configuration
     const assemblyAIApiKey = process.env.ASSEMBLYAI_API_KEY;
@@ -322,7 +331,7 @@ export class UserController {
         // Additional validation before calling Azure Speech SDK
         if (!isValidWavBuffer(audioBuffer)) {
           console.error(
-            "WAV validation failed before pronunciation assessment"
+            "WAV validation failed before pronunciation assessment",
           );
           throw new Error("Invalid WAV format for pronunciation assessment");
         }
@@ -343,7 +352,7 @@ export class UserController {
       }
     } else {
       console.log(
-        "Skipping pronunciation assessment - missing Azure config or no recognized text"
+        "Skipping pronunciation assessment - missing Azure config or no recognized text",
       );
     }
 
@@ -431,7 +440,7 @@ export class UserController {
       pronounciationScore.length > 0
         ? pronounciationScore.reduce(
             (sum, item) => sum + (item.score || 0),
-            0
+            0,
           ) / pronounciationScore.length
         : 0;
 
